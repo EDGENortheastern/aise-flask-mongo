@@ -49,6 +49,20 @@ After installing or upgrading packages, save the exact versions back to `require
 pip freeze > requirements.txt
 ```
 
+### 4. Run the app
+
+```bash
+python app.py
+```
+
+The app starts on [http://localhost:8000](http://localhost:8000).
+
+It needs a MongoDB database reachable at the `MONGO_URI` (defaults to
+`mongodb://localhost:27017`). Without one, creating a user shows this error
+instead of crashing:
+
+![Database unavailable error](static/no_db_error.png)
+
 ### Deactivate
 
 When you're done, leave the virtual environment:

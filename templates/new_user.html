@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Create user · Python + Mongo Starter{% endblock %}
+
+{% block content %}
+  <h1 class="title">Create user</h1>
+  <p class="subtitle">Add a new account with an email and password.</p>
+
+  <form class="form" method="post" action="{{ url_for('create_user') }}">
+    <label class="label" for="email">Email</label>
+    <input
+      class="input"
+      type="email"
+      id="email"
+      name="email"
+      placeholder="you@university.edu"
+      required
+      autofocus
+    />
+
+    <label class="label" for="password">Password</label>
+    <input
+      class="input"
+      type="password"
+      id="password"
+      name="password"
+      placeholder="••••••••"
+      required
+    />
+
+    <button class="button" type="submit">Create user</button>
+  </form>
+{% endblock %}
