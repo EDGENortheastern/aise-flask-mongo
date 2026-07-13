@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Log in · Python + Mongo Starter{% endblock %}
+
+{% block content %}
+  <h1 class="title">Log in</h1>
+  <p class="subtitle">Sign in with your email and password.</p>
+
+  <form class="form" method="post" action="{{ url_for('login') }}">
+    <label class="label" for="email">Email</label>
+    <input
+      class="input"
+      type="email"
+      id="email"
+      name="email"
+      placeholder="you@university.edu"
+      required
+      autofocus
+    />
+
+    <label class="label" for="password">Password</label>
+    <input
+      class="input"
+      type="password"
+      id="password"
+      name="password"
+      placeholder="••••••••"
+      required
+    />
+
+    <button class="button" type="submit">Log in</button>
+  </form>
+
+  <a class="button button-link" href="{{ url_for('new_user') }}">
+    Create an account
+  </a>
+{% endblock %}

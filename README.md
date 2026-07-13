@@ -63,7 +63,31 @@ instead of crashing:
 
 ![Database unavailable error](static/no_db_error.png)
 
-### Deactivate
+## Authentication
+
+The app has session-based authentication:
+
+- **Register** at `/users/new`. New passwords must meet the strength rules in
+  [`password_strength.py`](password_strength.py) (length + character variety).
+  A live meter on the form shows progress as you type, but the server always
+  re-checks — the browser meter can't be trusted on its own.
+- **Log in** at `/login`. Passwords are verified against the stored hash with
+  Werkzeug's `check_password_hash`.
+- **Log out** with the button in the top-right once signed in.
+- The user list at `/users` is protected by the `login_required` decorator and
+  redirects anonymous visitors to the login page.
+
+### Set a session secret
+
+Sessions are signed with `SECRET_KEY`. The default (`dev-secret-change-me`) is
+only for local development — set a real, random value in production, e.g. in a
+`.env` file:
+
+```bash
+SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+```
+
+## Deactivate
 
 When you're done, leave the virtual environment:
 

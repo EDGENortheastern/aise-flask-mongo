@@ -26,8 +26,31 @@
       name="password"
       placeholder="••••••••"
       required
+      aria-describedby="password-strength"
     />
+
+    <div class="strength" id="password-strength" data-strength hidden>
+      <div class="strength-bar">
+        <span class="strength-fill" data-strength-fill></span>
+      </div>
+      <p class="strength-label" data-strength-label></p>
+      <ul class="strength-list" data-strength-list>
+        {% for requirement in requirements %}
+          <li class="strength-item" data-req="{{ requirement.key }}">
+            {{ requirement.label }}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
 
     <button class="button" type="submit">Create user</button>
   </form>
+
+  <a class="button button-link" href="{{ url_for('login') }}">
+    Already have an account? Log in
+  </a>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/password-strength.js') }}"></script>
 {% endblock %}
