@@ -2,7 +2,14 @@
 
 A [Flask](https://flask.palletsprojects.com/en/stable) + [MongoDB](https://www.mongodb.com/docs/languages/python/) starter with session-based authentication and enforced password strength.
 
-**Live demo:** [edgenortheastern.github.io/aise-flask-mongo](https://edgenortheastern.github.io/aise-flask-mongo/) — a tiny launch page that wakes the Render-hosted app (free tier — it sleeps when idle) and takes you there once it answers. In a hurry? Direct link: [aise-flask-mongo.onrender.com](https://aise-flask-mongo.onrender.com), but the first load after idling can take ~30–60 seconds.
+**Live demo:** [edgenortheastern.github.io/aise-flask-mongo](https://edgenortheastern.github.io/aise-flask-mongo/)
+
+The demo runs in two parts, and the link above is the front door:
+
+| URL | What it is |
+| --- | --- |
+| [edgenortheastern.github.io/aise-flask-mongo](https://edgenortheastern.github.io/aise-flask-mongo/) | **Wake-up page** (GitHub Pages — never sleeps). Shows the "demo is napping" banner and pings the app. Share *this* link. |
+| [aise-flask-mongo.onrender.com](https://aise-flask-mongo.onrender.com/) | **The app itself** (Render free tier — sleeps when idle). The wake-up page redirects here automatically once the app responds — ~30–60 s from cold, instantly if already awake. |
 
 ## User Docs
 
@@ -187,7 +194,14 @@ async function ping(timeoutMs) {
 
 `mode: "no-cors"` matters: the app sets no CORS headers, so this page cannot *read* responses from it — and doesn't need to. A resolved fetch means the server answered (awake); a rejected one means it is still waking or unreachable. Render's proxy holds the request open while the container boots, so the ping resolves the moment the app is up.
 
-To publish the page: repository **Settings → Pages → Deploy from a branch → `main` / `docs`**.
+To publish the page: repository **Settings → Pages → Deploy from a branch → `main` / `docs`**. Once published, the flow is:
+
+```text
+edgenortheastern.github.io/aise-flask-mongo    ← share this link (banner page, never sleeps)
+        │  pings the app, then auto-redirects
+        ▼
+aise-flask-mongo.onrender.com                  ← the Flask app (wakes on the first request)
+```
 
 ### Tests
 
