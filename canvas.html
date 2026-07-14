@@ -1,0 +1,120 @@
+<div id="kl_custom_css" dir="ltr">&nbsp;</div>
+<div id="kl_wrapper_3" class="kl_flat_sections kl_wrapper mps-page-content">
+    <div id="kl_banner" class="kl_border_radius_20 mps-banner-div">
+        <h2><span lang="EN-GB">Authentication with Flask and MongoDB</span></h2>
+    </div>
+    <div id="kl_banner_image"><img id="1546894" class="kl_rounded_20" src="https://nulondon.instructure.com/courses/6841/files/1558469/preview" alt="M4 ASE.png" data-api-endpoint="https://nulondon.instructure.com/api/v1/courses/6841/files/1558469" data-api-returntype="File" /></div>
+    <div id="kl_custom_block_0" style="background-color: #ffffff; color: #000000;">
+        <p class="kl_module_progress_icons" style="background-color: #3c5b72; color: #ffffff; border-color: #ffffff;">Icon Progress Bar/Navigation (built in browser, hidden in app)</p>
+    </div>
+
+    <p>To have real authentication, an application needs a trusted way to check who someone is, and that trust almost always rests on a database. In an authentication system the database holds the user records &mdash; here, just an email address and a <em>password hash</em> &mdash; and every security decision the app makes traces back to what is (and deliberately is not) stored in those records.</p>
+
+    <p>In the previous lesson, we connected Flask to MongoDB without authentication. That showed how a Flask application stores and retrieves records. In this lesson, MongoDB becomes part of a login system: Flask handles the application logic &mdash; receiving form data, checking routes, creating sessions, deciding what each user may see &mdash; while MongoDB stores the user records. This is much closer to how a real web application works than a simple <code>users.json</code> file.</p>
+
+    <h3>Try the app</h3>
+
+    <p>You can use the app in the embed below: create an account (watch the password meter as you type), log in, and see your own account page.</p>
+
+    <p style="text-align: center;"><iframe src="https://edgenortheastern.github.io/aise-flask-mongo/" title="Live demo: Flask + MongoDB authentication app" width="100%" height="700" style="max-width: 900px; border: 3px solid #0d3353; border-radius: 20px;" loading="lazy"></iframe></p>
+
+    <p style="text-align: center;"><em>If signing in doesn't stick inside the embed (some browsers block cookies in embedded pages), <a href="https://edgenortheastern.github.io/aise-flask-mongo/" target="_blank" rel="noopener">open the app in its own tab</a>. The full source is <a href="https://github.com/EDGENortheastern/aise-flask-mongo" target="_blank" rel="noopener">on GitHub</a>.</em></p>
+
+    <h3>Why the app "naps" &mdash; static vs dynamic hosting</h3>
+
+    <p>The first thing the embed shows is not the app at all &mdash; it is a <strong>wake-up page</strong>. The Flask app is hosted on Render's free tier, which stops the app's process after about 15 minutes without visitors and restarts it on the next request, which takes 30&ndash;60 seconds. That exposes an important difference between two kinds of hosting:</p>
+
+    <ul>
+        <li><strong>Dynamic hosting</strong> (Render): a <em>process</em> runs your Python code to build each response. If the process is asleep, it cannot produce any HTML &mdash; not even a &ldquo;please wait&rdquo; message.</li>
+        <li><strong>Static hosting</strong> (GitHub Pages): a plain file is served as-is. There is no process to sleep, so the page appears instantly, always.</li>
+    </ul>
+
+    <p>So the waiting room lives on the static host. The wake-up page appears immediately, then repeatedly asks the Flask app &ldquo;are you up yet?&rdquo; &mdash; and the moment the app answers, it redirects the browser to it:</p>
+
+    <pre style="margin: 16px auto; max-width: 660px; background-color: #f7f7f7; border: 1px solid #d0d0d0; border-radius: 10px; padding: 16px 20px; overflow-x: auto; text-align: left; font-size: 14px; line-height: 1.5;"><code>async function ping() {
+  try {
+    await fetch(APP_URL, { mode: "no-cors", cache: "no-store" });
+    return true;   // the server answered — it is awake
+  } catch (err) {
+    return false;  // still waking up (or unreachable)
+  }
+}</code></pre>
+
+    <p>One subtlety: the two sites are different <em>origins</em>, and the Flask app sets no CORS headers, so the wake-up page is not allowed to <em>read</em> the app's response. It doesn't need to &mdash; <code>mode: "no-cors"</code> lets the request go through, and merely <em>getting an answer</em> proves the app is awake.</p>
+
+    <h3>How the authentication works</h3>
+
+    <h4>1. The server is the authority on password strength</h4>
+
+    <p>The signup form shows a live strength meter in the browser, but browser checks are a convenience, not a defence &mdash; anyone can bypass a form with a hand-written request. The rule that actually matters runs on the server, on every registration:</p>
+
+    <pre style="margin: 16px auto; max-width: 660px; background-color: #f7f7f7; border: 1px solid #d0d0d0; border-radius: 10px; padding: 16px 20px; overflow-x: auto; text-align: left; font-size: 14px; line-height: 1.5;"><code>result = evaluate_password(password)
+if not result["acceptable"]:
+    flash(
+        "Password is not strong enough. It still needs: "
+        + ", ".join(result["unmet"]) + ".",
+        "error",
+    )
+    return redirect(url_for("new_user"))</code></pre>
+
+    <p>The rules themselves (8+ characters, lowercase, uppercase, a number, a symbol) are defined once, as data, and both the server check and the browser meter are driven from that single definition &mdash; so they can never disagree.</p>
+
+    <h4>2. Only password hashes are stored &mdash; never passwords</h4>
+
+    <pre style="margin: 16px auto; max-width: 660px; background-color: #f7f7f7; border: 1px solid #d0d0d0; border-radius: 10px; padding: 16px 20px; overflow-x: auto; text-align: left; font-size: 14px; line-height: 1.5;"><code>users.insert_one(
+    {
+        "email": email,
+        "password_hash": generate_password_hash(password),
+    }
+)</code></pre>
+
+    <p><code>generate_password_hash</code> applies a one-way, salted hash. One-way means the original password cannot be recovered from what is stored &mdash; even by us, even if the database leaks. Salted means two users with the same password still get different hashes, so an attacker cannot spot reused passwords or use precomputed tables. At login, <code>check_password_hash</code> re-hashes what the user typed and compares.</p>
+
+    <h4>3. Logging in creates a signed session</h4>
+
+    <pre style="margin: 16px auto; max-width: 660px; background-color: #f7f7f7; border: 1px solid #d0d0d0; border-radius: 10px; padding: 16px 20px; overflow-x: auto; text-align: left; font-size: 14px; line-height: 1.5;"><code>user = users.find_one({"email": email})
+
+if user is None or not check_password_hash(user["password_hash"], password):
+    flash("Invalid email or password.", "error")
+    return redirect(url_for("login"))
+
+session["user_email"] = email</code></pre>
+
+    <p>Two details here are deliberate. First, the error message is identical whether the email is unknown or the password is wrong &mdash; a login form that says &ldquo;no such user&rdquo; lets anyone probe which emails hold accounts. Second, <code>session</code> is stored in a cookie that Flask <em>cryptographically signs</em> with the app's <code>SECRET_KEY</code>: users can read their own cookie, but any tampering (say, editing the email inside it) breaks the signature and the session is rejected. This is why the secret key must be truly secret in production.</p>
+
+    <h4>4. Routes that need a user are wrapped in a decorator</h4>
+
+    <pre style="margin: 16px auto; max-width: 660px; background-color: #f7f7f7; border: 1px solid #d0d0d0; border-radius: 10px; padding: 16px 20px; overflow-x: auto; text-align: left; font-size: 14px; line-height: 1.5;"><code>def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if "user_email" not in session:
+            flash("Please log in to continue.", "error")
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+
+    return wrapped</code></pre>
+
+    <p>Any route decorated with <code>@login_required</code> bounces anonymous visitors to the login page before a single line of the route runs. Protection lives in one place instead of being copy-pasted into every view.</p>
+
+    <h4>5. Users see their own data &mdash; and nothing else</h4>
+
+    <pre style="margin: 16px auto; max-width: 660px; background-color: #f7f7f7; border: 1px solid #d0d0d0; border-radius: 10px; padding: 16px 20px; overflow-x: auto; text-align: left; font-size: 14px; line-height: 1.5;"><code>@app.route("/users")
+@login_required
+def account():
+    email = session["user_email"]
+    current_user = users.find_one({"email": email})   # only YOUR record
+    return render_template("account.html", current_user=current_user)</code></pre>
+
+    <p>An earlier version of this page listed <em>every</em> user's email to any signed-in account &mdash; which meant one account could harvest the whole membership list. The fix queries only the signed-in user's own document. Authentication says <em>who you are</em>; deciding <em>what you may see</em> is a separate obligation, and the safe default is: your own data, nothing more.</p>
+
+    <h3>Key takeaways</h3>
+
+    <ul>
+        <li>Store salted password hashes, never passwords &mdash; hashing is one-way on purpose.</li>
+        <li>Client-side validation is UX; the server-side check is the security boundary.</li>
+        <li>A session is a signed cookie: readable by the user, forgeable by no one &mdash; as long as the secret key is secret.</li>
+        <li>Error messages leak information; keep &ldquo;wrong email&rdquo; and &ldquo;wrong password&rdquo; indistinguishable.</li>
+        <li>Being logged in is not permission to see everything &mdash; default to showing users only their own records.</li>
+        <li>Dynamic apps can sleep; static files cannot. Put the &ldquo;please wait&rdquo; where it can always be served.</li>
+    </ul>
+</div>

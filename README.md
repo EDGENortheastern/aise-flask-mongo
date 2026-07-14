@@ -283,6 +283,8 @@ web: gunicorn app:app --bind 0.0.0.0:$PORT
 
 Set `MONGO_URI`, `MONGO_DB`, and a real `SECRET_KEY` in the service's environment variables. The wake-up page in [`docs/`](docs/) is published separately with GitHub Pages (see [Free-tier wake-up page](#free-tier-wake-up-page)).
 
+On Render (detected via the `RENDER` env var the platform sets automatically) the session cookie is configured with `SameSite=None; Secure`. This lets logins work when the app is embedded in an iframe — e.g. on a Canvas course page — where the cookie counts as *third-party* and would otherwise be dropped by the browser, silently losing the session right after login. `Secure` restricts this to HTTPS, which is also why the setting stays off in local development. Trade-offs: `SameSite=None` gives up the mild CSRF protection `Lax` provides, and Safari blocks third-party cookies regardless of attributes — Safari users inside an embed still need an "open in its own tab" link.
+
 ## Security notes
 
 - Passwords are stored only as salted hashes (`generate_password_hash`), never in plain text.
