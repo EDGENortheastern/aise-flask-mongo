@@ -56,7 +56,7 @@ def login_required(view):
 @app.route("/")
 def index():
     if "user_email" in session:
-        return redirect(url_for("list_users"))
+        return redirect(url_for("account"))
     return redirect(url_for("login"))
 
 
@@ -133,7 +133,7 @@ def login():
 
     session["user_email"] = email
     flash(f"Welcome back, {email}.", "success")
-    return redirect(url_for("list_users"))
+    return redirect(url_for("account"))
 
 
 @app.route("/logout", methods=["POST"])
@@ -145,13 +145,18 @@ def logout():
 
 @app.route("/users")
 @login_required
-def list_users():
+def account():
+    # Only ever show the logged-in user their OWN account. Listing every
+    # user's email would leak the whole membership list to anyone holding a
+    # single account, so this deliberately looks up just the current user
+    # instead of querying the entire collection.
+    email = session["user_email"]
     try:
-        all_users = list(users.find().sort("_id", -1))
+        current_user = users.find_one({"email": email})
     except PyMongoError:
         flash("Database unavailable. Please try again later.", "error")
-        all_users = []
-    return render_template("users.html", users=all_users)
+        current_user = None
+    return render_template("account.html", current_user=current_user)
 
 
 if __name__ == "__main__":

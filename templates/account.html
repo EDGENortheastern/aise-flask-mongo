@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Your account · Python + Mongo Starter{% endblock %}
+
+{% block content %}
+  <h1 class="title">Your account</h1>
+
+  {% if current_user %}
+    <p class="subtitle">You are signed in as:</p>
+    <ul class="user-list">
+      <li class="user-item">{{ current_user.email }}</li>
+    </ul>
+  {% else %}
+    <p class="subtitle">We couldn't load your account right now.</p>
+  {% endif %}
+
+  <a class="button button-link" href="{{ url_for('new_user') }}">
+    Create another account
+  </a>
+{% endblock %}
