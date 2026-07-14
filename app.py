@@ -33,12 +33,6 @@ db = client[DB_NAME]
 users = db["users"]
 
 
-@app.context_processor
-def inject_deploy_flags():
-    """Expose on_render so templates can show the free-tier deploy banner."""
-    return {"on_render": bool(os.getenv("RENDER"))}
-
-
 def login_required(view):
     """Redirect anonymous visitors to the login page."""
 

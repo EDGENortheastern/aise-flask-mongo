@@ -18,14 +18,6 @@
   <body>
     <main class="page">
       <div class="card">
-        {% if on_render %}
-          <div class="deploy-banner" role="status">
-            ⏳ This project is deployed for free on Render.com — if it has been
-            idle it can take ~30–60s to wake up on the first request. Thanks
-            for your patience!
-          </div>
-        {% endif %}
-
         <div class="topbar">
           <p class="brand">Python + Mongo Starter</p>
           {% if session.user_email %}

@@ -126,15 +126,3 @@ def test_account_page_shows_only_own_email(client, users_col):
     assert "You are signed in as:" in body
     assert "lola@example.com" in body
     assert "lola1@example.com" not in body
-
-
-def test_deploy_banner_hidden_when_not_on_render(client, monkeypatch):
-    monkeypatch.delenv("RENDER", raising=False)
-    resp = client.get("/login")
-    assert "Render.com" not in resp.get_data(as_text=True)
-
-
-def test_deploy_banner_shown_on_render(client, monkeypatch):
-    monkeypatch.setenv("RENDER", "true")
-    resp = client.get("/login")
-    assert "Render.com" in resp.get_data(as_text=True)

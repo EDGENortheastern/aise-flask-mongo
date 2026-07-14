@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Python + Mongo Starter · Waking the demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --yellow-100: #ffe1a5;
+        --yellow-400: #fdb737;
+        --green-400: #045944;
+        --green-500: #1b4538;
+        --blue-100: #c8eaf7;
+        --blue-400: #2d7496;
+        --blue-500: #0d3353;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        color: var(--blue-500);
+        background: var(--blue-100);
+      }
+
+      .page {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 480px;
+        background: #ffffff;
+        border: 3px solid var(--blue-500);
+        border-radius: 24px;
+        padding: 40px 44px 44px;
+        text-align: center;
+      }
+
+      .brand {
+        margin: 0 0 24px;
+        font-weight: 700;
+        font-size: 18px;
+        text-align: left;
+      }
+
+      .emoji {
+        font-size: 56px;
+        line-height: 1;
+        margin: 0 0 12px;
+      }
+
+      .emoji.bob {
+        animation: bob 1.6s ease-in-out infinite;
+      }
+
+      @keyframes bob {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-8px);
+        }
+      }
+
+      .title {
+        margin: 0 0 20px;
+        font-weight: 900;
+        font-size: 36px;
+        line-height: 1.1;
+      }
+
+      .notice {
+        background: var(--yellow-100);
+        border: 1.5px solid var(--yellow-400);
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin: 0 0 20px;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.4;
+        text-align: left;
+      }
+
+      .status {
+        min-height: 24px;
+        margin: 0 0 24px;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--blue-400);
+      }
+
+      .button {
+        font-family: inherit;
+        font-weight: 700;
+        font-size: 18px;
+        color: #ffffff;
+        background: var(--green-400);
+        border: none;
+        border-radius: 10px;
+        padding: 16px 24px;
+        width: 100%;
+        cursor: pointer;
+      }
+
+      .button:hover:not(:disabled) {
+        background: var(--green-500);
+      }
+
+      .button:disabled {
+        opacity: 0.7;
+        cursor: wait;
+      }
+
+      .footer {
+        margin: 24px 0 0;
+        font-size: 13px;
+      }
+
+      .footer a {
+        color: var(--blue-400);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <div class="card">
+        <p class="brand">Python + Mongo Starter</p>
+        <p class="emoji bob" data-emoji>😴</p>
+        <h1 class="title" data-title>The demo is napping</h1>
+        <p class="notice">
+          ⏳ This project is deployed for free on Render.com. To stay free it
+          sleeps when nobody visits, and the first wake-up can take
+          ~30–60&nbsp;seconds. This page pokes it for you — be patient!
+        </p>
+        <p class="status" role="status" aria-live="polite" data-status>
+          Waking the app up…
+        </p>
+        <button class="button" type="button" data-button disabled>
+          ☕ Brewing… usually 30–60 s
+        </button>
+        <noscript>
+          <p class="status">
+            JavaScript is off, so no automatic wake-up — open
+            <a href="https://aise-flask-mongo.onrender.com/">the app</a>
+            directly and give it a minute.
+          </p>
+        </noscript>
+        <p class="footer">
+          <a href="https://github.com/EDGENortheastern/aise-flask-mongo"
+            >Source on GitHub</a
+          >
+        </p>
+      </div>
+    </main>
+    <script>
+      const APP_URL = "https://aise-flask-mongo.onrender.com/";
+      const emoji = document.querySelector("[data-emoji]");
+      const title = document.querySelector("[data-title]");
+      const status = document.querySelector("[data-status]");
+      const button = document.querySelector("[data-button]");
+
+      let appIsAwake = false;
+
+      /* The app sets no CORS headers, so this page cannot read responses
+         from it — and does not need to. A no-cors fetch resolves as soon as
+         the server answers at all (awake) and rejects on network failure or
+         timeout (still waking). Render's proxy holds the request open while
+         the container boots, so this resolves the moment the app is up. */
+      async function ping(timeoutMs) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          await fetch(APP_URL, {
+            mode: "no-cors",
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          return true;
+        } catch (err) {
+          return false;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      function showWaking() {
+        emoji.textContent = "😴";
+        emoji.classList.add("bob");
+        title.textContent = "The demo is napping";
+        status.textContent = "Waking the app up…";
+        button.disabled = true;
+        button.textContent = "☕ Brewing… usually 30–60 s";
+      }
+
+      function showAwake() {
+        appIsAwake = true;
+        emoji.textContent = "🎉";
+        emoji.classList.remove("bob");
+        title.textContent = "Good morning!";
+        button.disabled = false;
+        button.textContent = "Open the app 🚀";
+        let seconds = 3;
+        status.textContent = `Awake! Taking you there in ${seconds}…`;
+        const tick = setInterval(() => {
+          seconds -= 1;
+          if (seconds <= 0) {
+            clearInterval(tick);
+            window.location.href = APP_URL;
+          } else {
+            status.textContent = `Awake! Taking you there in ${seconds}…`;
+          }
+        }, 1000);
+      }
+
+      function showStillAsleep() {
+        emoji.textContent = "😅";
+        emoji.classList.remove("bob");
+        title.textContent = "Still snoozing";
+        status.textContent =
+          "That took too long — the free tier has slow mornings.";
+        button.disabled = false;
+        button.textContent = "Give it another nudge 👉";
+      }
+
+      async function wake() {
+        showWaking();
+        (await ping(90000)) ? showAwake() : showStillAsleep();
+      }
+
+      button.addEventListener("click", () => {
+        if (appIsAwake) {
+          window.location.href = APP_URL;
+        } else {
+          wake();
+        }
+      });
+
+      wake();
+    </script>
+  </body>
+</html>

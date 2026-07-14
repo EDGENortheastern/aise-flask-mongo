@@ -2,7 +2,7 @@
 
 A [Flask](https://flask.palletsprojects.com/en/stable) + [MongoDB](https://www.mongodb.com/docs/languages/python/) starter with session-based authentication and enforced password strength.
 
-**Live demo:** [aise-flask-mongo.onrender.com](https://aise-flask-mongo.onrender.com) — hosted on Render's free tier, so after a period of inactivity the first request can take ~30–60 seconds while the service wakes up. The site shows a banner saying exactly that.
+**Live demo:** [edgenortheastern.github.io/aise-flask-mongo](https://edgenortheastern.github.io/aise-flask-mongo/) — a tiny launch page that wakes the Render-hosted app (free tier — it sleeps when idle) and takes you there once it answers. In a hurry? Direct link: [aise-flask-mongo.onrender.com](https://aise-flask-mongo.onrender.com), but the first load after idling can take ~30–60 seconds.
 
 ## User Docs
 
@@ -162,20 +162,36 @@ def account():
     return render_template("account.html", current_user=current_user)
 ```
 
-### Render free-tier banner
+### Free-tier wake-up page
 
-A context processor exposes an `on_render` flag to every template. Render sets the `RENDER` env var automatically on its services, so the "this app may be sleeping" banner appears only on the deployed site, never in local development:
+Render's free tier puts the app to sleep after ~15 minutes of inactivity, and a sleeping app cannot render its own "please wait" banner — the visitor would just stare at a blank tab for 30–60 seconds. So the waiting room lives *outside* the app: [`docs/index.html`](docs/index.html) is a static page (published with GitHub Pages, which never sleeps) that shows the notice instantly, pings the app, and redirects once it responds:
 
-```python
-@app.context_processor
-def inject_deploy_flags():
-    """Expose on_render so templates can show the free-tier deploy banner."""
-    return {"on_render": bool(os.getenv("RENDER"))}
+```js
+async function ping(timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await fetch(APP_URL, {
+      mode: "no-cors",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    return true;
+  } catch (err) {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 ```
+
+`mode: "no-cors"` matters: the app sets no CORS headers, so this page cannot *read* responses from it — and doesn't need to. A resolved fetch means the server answered (awake); a rejected one means it is still waking or unreachable. Render's proxy holds the request open while the container boots, so the ping resolves the moment the app is up.
+
+To publish the page: repository **Settings → Pages → Deploy from a branch → `main` / `docs`**.
 
 ### Tests
 
-[`tests/test_app.py`](tests/test_app.py) covers the password rules, registration, login protection, account-page privacy, and the deploy banner — **without a real MongoDB**. Each test swaps the module-level `users` collection for an in-memory fake:
+[`tests/test_app.py`](tests/test_app.py) covers the password rules, registration, login protection, and account-page privacy — **without a real MongoDB**. Each test swaps the module-level `users` collection for an in-memory fake:
 
 ```python
 @pytest.fixture
@@ -251,7 +267,7 @@ The app starts on [http://localhost:8000](http://localhost:8000). When you're do
 web: gunicorn app:app --bind 0.0.0.0:$PORT
 ```
 
-Set `MONGO_URI`, `MONGO_DB`, and a real `SECRET_KEY` in the service's environment variables. Render sets `RENDER=true` on its own, which switches the free-tier banner on.
+Set `MONGO_URI`, `MONGO_DB`, and a real `SECRET_KEY` in the service's environment variables. The wake-up page in [`docs/`](docs/) is published separately with GitHub Pages (see [Free-tier wake-up page](#free-tier-wake-up-page)).
 
 ## Security notes
 
@@ -260,3 +276,84 @@ Set `MONGO_URI`, `MONGO_DB`, and a real `SECRET_KEY` in the service's environmen
 - A signed-in user can only ever see their own account; there is no user listing.
 - Sessions are only tamper-proof once a real `SECRET_KEY` is set: when the env var is unset, the app silently falls back to the public dev default in `app.py`.
 - **Known limitation:** the registration form does reveal whether an email is already taken ("A user with that email already exists"). Fixing this properly needs a different signup flow (e.g. email confirmation), which is out of scope for this starter.
+
+## Tutorial: how this app was built
+
+The git history tells the real story — each step below is one or two actual commits. The order matters: scaffold before code, form before database, security review after features, tests before CI.
+
+### Step 1 — Scaffold the repository (`c58afa4`, `6bef7c2`)
+
+Start with housekeeping, not code: a Python `.gitignore`, a `LICENSE`, a virtual environment, and pinned dependencies.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install flask pymongo python-dotenv certifi
+pip freeze > requirements.txt
+```
+
+Freezing immediately means anyone (including CI, later) can reproduce the exact environment with `pip install -r requirements.txt`.
+
+### Step 2 — Document as you go (`c612356`)
+
+The next commit contained nothing but the setup instructions above, in this README. Writing docs *while* building keeps them accurate; writing them at the end means guessing.
+
+### Step 3 — Registration first, database later (`af35254`)
+
+The first feature: a styled signup form ([`base.html`](templates/base.html) layout + [`new_user.html`](templates/new_user.html)) and a `POST /users` route. This commit also added gunicorn to `requirements.txt` and a `Procfile`, so the project was deployable from its first feature onward. Notably, this commit worked **without any database running** — its message even says so. Two decisions from it still shape the app:
+
+1. **Fail fast, fail friendly.** The Mongo client gets a 3-second timeout and every route catches `PyMongoError`, so with no database reachable the form still renders and shows a clear message instead of hanging or crashing (see [Database connection](#database-connection)).
+
+2. **Hash from day one.** Even though login didn't exist yet, passwords were already stored with `generate_password_hash` — the original code carried the comment *"Passwords are hashed even though there is no login yet"*. Retrofitting hashing later would have meant invalidating every stored password.
+
+### Step 4 — Authentication and password strength (`fe90303`)
+
+This commit added [`password_strength.py`](password_strength.py), the login page, and sessions. The key design choice: the strength rules are **data, not scattered ifs** — a list of `(key, label, test)` tuples (see [Password strength rules](#password-strength-rules)). One definition drives three things:
+
+- the server-side check in `create_user` (the enforcement that matters),
+- the requirement checklist rendered into the signup form,
+- the live meter in [`password-strength.js`](static/js/password-strength.js), which mirrors the same rules for instant feedback but is never trusted.
+
+Logging in verifies the hash and stores only the email in a signed session cookie:
+
+```python
+session["user_email"] = email
+```
+
+Routes that need a signed-in user are wrapped with the `login_required` decorator (see [Protecting routes](#protecting-routes)).
+
+### Step 5 — Security review: fix the email leak (`8199cb2`)
+
+The original `/users` page listed **every** user's email to any signed-in account — one account could enumerate the whole membership list. The fix replaced it with an account page that looks up only the signed-in user's own document (see [The account page shows only you](#the-account-page-shows-only-you)).
+
+The same commit added the test suite, so the fix is *proven*, not assumed. The privacy test creates two users, signs in as one, and asserts the other never appears:
+
+```python
+assert "You are signed in as:" in body
+assert "lola@example.com" in body
+assert "lola1@example.com" not in body
+```
+
+The tests run against an in-memory `FakeCollection` instead of a real MongoDB (see [Tests](#tests)) — which pays off in the next step.
+
+### Step 6 — Continuous integration (`0e83ee9`)
+
+A GitHub Actions workflow ([`ci.yml`](.github/workflows/ci.yml)) runs the suite in the cloud. As first committed it triggered on every push to any branch; it was later narrowed to pushes on `main` plus pull requests, so a PR doesn't run the same job twice. Because the tests need no database, the workflow is just *checkout → install → pytest* — no services to configure, nothing to keep in sync.
+
+### Step 7 — Deploy, banner, and polish (`2bd2f19`)
+
+The app runs on Render's free tier via the `Procfile` and gunicorn. Free-tier services sleep when idle, so this commit added an in-app "be patient, it's waking up" banner, keyed off the `RENDER` env var the platform sets automatically.
+
+One lesson from this step earned its place in the tutorial: **the live site runs whatever was last pushed and deployed, not your local working tree.** At one point the deployed demo happily accepted the password `123` while the local code demonstrably rejected it — the "bug" was a stale deploy, and the fix was a push and redeploy, not more code.
+
+### Step 8 — The banner paradox: a wake-up page
+
+The banner from step 7 had a flaw hiding in plain sight: it was HTML rendered *by the app*, so during the one stretch where it mattered most — while the app was asleep and a visitor stared at a blank tab — nothing could render it. The fix was to move the waiting room somewhere that never sleeps: [`docs/index.html`](docs/index.html), a static page for GitHub Pages that shows the notice instantly, pings the app, and redirects once it answers (see [Free-tier wake-up page](#free-tier-wake-up-page)). The in-app banner and its context processor were then removed — the static page does the job better.
+
+### If you rebuild this yourself
+
+1. Scaffold and pin dependencies before writing features.
+2. Make the app survive missing infrastructure from the start — timeouts and caught errors, not crashes.
+3. Hash passwords before you need login, define validation rules once as data, and let the server be the authority.
+4. Review your own features for what they *reveal* (user lists, error messages), and encode each fix as a test.
+5. Add CI only once the tests run anywhere; deploy early and remember to redeploy.
