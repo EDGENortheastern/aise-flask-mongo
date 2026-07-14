@@ -1,19 +1,14 @@
 """Password strength rules and evaluation.
 
-This module is deliberately dependency-free and small so it is easy to read
-and to mirror in the browser (see static/js/password-strength.js). The rules
-defined here are the source of truth; the client-side meter is only a
-convenience for the user and must never be trusted on its own.
+The rules here are the source of truth; the meter in
+static/js/password-strength.js only mirrors them and is never trusted on its
+own. Requirement keys match the data-req attributes in new_user.html.
 """
 
 import re
 
-# The minimum number of characters a password must have.
 MIN_LENGTH = 8
 
-# Each requirement is (key, human-readable label, test function). The keys line
-# up with the data-req attributes in templates/new_user.html so the live meter
-# can highlight exactly which rules are still unmet.
 REQUIREMENTS = [
     ("length", f"at least {MIN_LENGTH} characters", lambda p: len(p) >= MIN_LENGTH),
     ("lowercase", "a lowercase letter", lambda p: bool(re.search(r"[a-z]", p))),
@@ -22,20 +17,15 @@ REQUIREMENTS = [
     ("symbol", "a symbol (e.g. ! ? @ #)", lambda p: bool(re.search(r"[^A-Za-z0-9]", p))),
 ]
 
-# A password must satisfy this many requirements to be accepted. Requiring all
-# of them keeps the rule simple to explain to users.
 REQUIRED_COUNT = len(REQUIREMENTS)
 
 
 def evaluate_password(password):
-    """Return a summary of how a password measures up against the rules.
+    """Summarise how a password measures up against REQUIREMENTS.
 
-    The result is a dict with:
-      - "met":        list of requirement labels the password satisfies
-      - "unmet":      list of requirement labels the password is missing
-      - "score":      number of requirements met (0..len(REQUIREMENTS))
-      - "strength":   "weak" | "fair" | "strong"
-      - "acceptable": True when the password may be used
+    Returns a dict with "met"/"unmet" requirement labels, "score",
+    "strength" ("weak" | "fair" | "strong"), and "acceptable" (True only
+    when every requirement is met).
     """
     met = [label for _key, label, test in REQUIREMENTS if test(password)]
     unmet = [label for _key, label, test in REQUIREMENTS if not test(password)]

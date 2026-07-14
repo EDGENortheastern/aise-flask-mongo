@@ -1,9 +1,7 @@
 """Tests for auth, password strength, and account privacy.
 
-These tests never touch a real MongoDB. The route handlers in app.py use a
-module-level ``users`` collection, so each test swaps in an in-memory fake
-(see ``FakeCollection``) via monkeypatch. That keeps the suite fast and lets
-it run anywhere without a database.
+No real MongoDB is used: each test swaps the module-level ``users``
+collection for an in-memory ``FakeCollection`` via monkeypatch.
 """
 
 import pytest
@@ -14,11 +12,7 @@ from password_strength import evaluate_password
 
 
 class FakeCollection:
-    """Minimal stand-in for a pymongo collection.
-
-    Implements just the operations the routes use: insert_one, find_one, and
-    find().sort(). Documents are kept in a plain list.
-    """
+    """In-memory stand-in for the pymongo operations the routes use."""
 
     def __init__(self):
         self._docs = []
@@ -73,8 +67,6 @@ def client(users_col):
         yield test_client
 
 
-# --- password strength rules (pure function) --------------------------------
-
 def test_evaluate_password_rejects_123():
     result = evaluate_password("123")
     assert result["acceptable"] is False
@@ -87,19 +79,18 @@ def test_evaluate_password_accepts_strong():
     assert result["unmet"] == []
 
 
-# --- registration enforces strength server-side -----------------------------
-
 def test_create_user_rejects_weak_password(client, users_col):
+    """A weak password must never reach the database."""
     resp = client.post(
         "/users", data={"email": "weak@example.com", "password": "123"}
     )
     assert resp.status_code == 302
     assert "/users/new" in resp.headers["Location"]
-    # A weak password must never reach the database.
     assert users_col.find_one({"email": "weak@example.com"}) is None
 
 
 def test_create_user_accepts_strong_password(client, users_col):
+    """A strong password is accepted and stored only as a hash."""
     resp = client.post(
         "/users",
         data={"email": "good@example.com", "password": "Str0ng!pass"},
@@ -108,12 +99,9 @@ def test_create_user_accepts_strong_password(client, users_col):
     assert "/login" in resp.headers["Location"]
     saved = users_col.find_one({"email": "good@example.com"})
     assert saved is not None
-    # Stored as a hash, never the plain password.
     assert "password_hash" in saved
     assert saved["password_hash"] != "Str0ng!pass"
 
-
-# --- account page privacy ---------------------------------------------------
 
 def test_account_page_requires_login(client):
     resp = client.get("/users")
@@ -122,6 +110,7 @@ def test_account_page_requires_login(client):
 
 
 def test_account_page_shows_only_own_email(client, users_col):
+    """The account page must never leak other users' emails."""
     users_col.insert_one(
         {"email": "lola@example.com", "password_hash": generate_password_hash("x")}
     )
@@ -134,5 +123,18 @@ def test_account_page_shows_only_own_email(client, users_col):
     resp = client.get("/users")
     body = resp.get_data(as_text=True)
 
-    assert "lola@example.com" in body  # the signed-in user's own email
-    assert "lola1@example.com" not in body  # another user's email must not leak
+    assert "You are signed in as:" in body
+    assert "lola@example.com" in body
+    assert "lola1@example.com" not in body
+
+
+def test_deploy_banner_hidden_when_not_on_render(client, monkeypatch):
+    monkeypatch.delenv("RENDER", raising=False)
+    resp = client.get("/login")
+    assert "Render.com" not in resp.get_data(as_text=True)
+
+
+def test_deploy_banner_shown_on_render(client, monkeypatch):
+    monkeypatch.setenv("RENDER", "true")
+    resp = client.get("/login")
+    assert "Render.com" in resp.get_data(as_text=True)

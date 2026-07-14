@@ -26,10 +26,6 @@ app.secret_key = os.getenv("SECRET_KEY", "dev-secret-change-me")
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DB_NAME = os.getenv("MONGO_DB", "py-mongo-starter")
 
-# certifi provides the CA bundle needed for TLS connections to MongoDB Atlas.
-# It is ignored for plain local connections (mongodb://localhost).
-# serverSelectionTimeoutMS keeps requests from hanging ~30s when the database
-# is unreachable; instead they fail fast and we show a friendly message.
 client = MongoClient(
     MONGO_URI, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=3000
 )
@@ -37,11 +33,14 @@ db = client[DB_NAME]
 users = db["users"]
 
 
-def login_required(view):
-    """Redirect anonymous visitors to the login page.
+@app.context_processor
+def inject_deploy_flags():
+    """Expose on_render so templates can show the free-tier deploy banner."""
+    return {"on_render": bool(os.getenv("RENDER"))}
 
-    Wrap any route that should only be reachable once a user has logged in.
-    """
+
+def login_required(view):
+    """Redirect anonymous visitors to the login page."""
 
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -62,8 +61,7 @@ def index():
 
 @app.route("/users/new")
 def new_user():
-    # The requirements are passed to the template so the on-screen checklist
-    # always matches the rules enforced on the server.
+    """Render the signup form; the requirement checklist mirrors the server rules."""
     requirements = [
         {"key": key, "label": label} for key, label, _test in REQUIREMENTS
     ]
@@ -72,6 +70,7 @@ def new_user():
 
 @app.route("/users", methods=["POST"])
 def create_user():
+    """Create a user, enforcing strength server-side; store only a salted hash."""
     email = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
 
@@ -79,8 +78,6 @@ def create_user():
         flash("Email and password are both required.", "error")
         return redirect(url_for("new_user"))
 
-    # Enforce password strength on the server. The browser meter is only a
-    # convenience and can be bypassed, so this check is what actually matters.
     result = evaluate_password(password)
     if not result["acceptable"]:
         flash(
@@ -99,7 +96,6 @@ def create_user():
         users.insert_one(
             {
                 "email": email,
-                # Only ever store a salted hash, never the plain password.
                 "password_hash": generate_password_hash(password),
             }
         )
@@ -113,6 +109,7 @@ def create_user():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    """Log a user in; one generic error avoids revealing which emails exist."""
     if request.method == "GET":
         return render_template("login.html")
 
@@ -125,8 +122,6 @@ def login():
         flash("Database unavailable. Please try again later.", "error")
         return redirect(url_for("login"))
 
-    # Use one generic message for both "no such user" and "wrong password" so
-    # the form does not reveal which emails are registered.
     if user is None or not check_password_hash(user["password_hash"], password):
         flash("Invalid email or password.", "error")
         return redirect(url_for("login"))
@@ -146,10 +141,7 @@ def logout():
 @app.route("/users")
 @login_required
 def account():
-    # Only ever show the logged-in user their OWN account. Listing every
-    # user's email would leak the whole membership list to anyone holding a
-    # single account, so this deliberately looks up just the current user
-    # instead of querying the entire collection.
+    """Show the signed-in user their own account only, never other users."""
     email = session["user_email"]
     try:
         current_user = users.find_one({"email": email})
